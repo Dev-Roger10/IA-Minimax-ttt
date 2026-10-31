@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MiniMax – Tres en Raya</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+  <style>
+    /* colores base del tema oscuro */
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131c;
+      --border: #2a2a3d;
+      --accent: #7c3aed;
+      --accent2: #06b6d4;
+      --x-color: #f472b6;
+      --o-color: #34d399;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    /* titulo y badge de arriba */
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    /* caja central que agrupa marcador, tablero y boton */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    /* barra de mensaje (tu turno, IA pensando, resultado) */
+    #estado {
+      text-align: center;
+      font-size: 15px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: rgba(124,58,237,0.12);
+      border: 1px solid var(--border);
+      margin-bottom: 22px;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .3s;
+    }
+
+    /* grilla de 3 columnas, cada celda es cuadrada */
+    #tablero {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .celda {
+      aspect-ratio: 1;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.8rem, 6vw, 2.6rem);
+      cursor: pointer;
+      transition: border-color .2s, background .2s, transform .15s;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .celda:hover:not(.bloqueada) {
+      border-color: var(--accent);
+      background: rgba(124,58,237,0.08);
+      transform: scale(1.04);
+    }
+    .celda.bloqueada { cursor: not-allowed; }
+
+    /* la X y la O se pintan segun el data-val de la celda */
+    .celda[data-val="X"] { color: var(--x-color); border-color: rgba(244,114,182,0.4); }
+    .celda[data-val="O"] { color: var(--o-color); border-color: rgba(52,211,153,0.4); }
+
+    /* efecto de rebote cuando se coloca una ficha */
+    @keyframes pop {
+      0%   { transform: scale(0.5); opacity: 0; }
+      70%  { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .celda.pop-anim span { animation: pop .25s ease-out; }
+
+    /* Celdas ganadoras */
+    .celda.ganadora { background: rgba(52,211,153,0.15); border-color: var(--o-color); }
+    .celda.ganadora-x { background: rgba(244,114,182,0.15); border-color: var(--x-color); }
+
+    /* boton de nueva partida */
+    #btn-reiniciar {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s;
+    }
+    #btn-reiniciar:hover { opacity: .88; transform: translateY(-1px); }
+    #btn-reiniciar:active { transform: translateY(0); }
+
+    /* debajo del tablero: quien es X y quien es O */
+    .leyenda {
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .leyenda span { color: var(--muted); }
+    .leyenda b.x { color: var(--x-color); }
+    .leyenda b.o { color: var(--o-color); }
+
+    /* contadores de victorias, empates y derrotas */
+    .marcador {
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+      margin-bottom: 22px;
+      padding: 14px;
+      background: var(--bg);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .marcador .item { font-size: 13px; color: var(--muted); }
+    .marcador .num  { font-size: 26px; font-weight: bold; margin-top: 2px; }
+    .marcador .num.x { color: var(--x-color); }
+    .marcador .num.o { color: var(--o-color); }
+    .marcador .num.e { color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge">Subtema 1</div>
+  <h1>ALGORITMO MINIMAX</h1>
+  <p>Tres en Raya &mdash; IA invencible sin poda</p>
+</header>
+
+<div class="panel">
+
+  <!-- puntos acumulados mientras no se recargue la pagina -->
+  <div class="marcador">
+    <div class="item">TÚ (X)<div class="num x" id="pts-x">0</div></div>
+    <div class="item">EMPATES<div class="num e" id="pts-e">0</div></div>
+    <div class="item">IA (O)<div class="num o" id="pts-o">0</div></div>
+  </div>
+
+  <!-- aqui se escribe el turno o el resultado (ver setEstado) -->
+  <div id="estado"><i class="ti ti-hourglass"></i> Tu turno – elige una celda</div>
+
+  <!-- contenedor del tablero -->
+  <div id="tablero">
+    <!-- las 9 celdas las crea construirTablero() -->
+  </div>
+
+  <!-- limpia el tablero pero conserva el marcador -->
+  <button id="btn-reiniciar" onclick="reiniciar()"><i class="ti ti-refresh"></i> NUEVA PARTIDA</button>
+
+  <!-- referencia de simbolos -->
+  <div class="leyenda">
+    <span><b class="x">X</b> = Tú</span>
+    <span><b class="o">O</b> = IA (MiniMax)</span>
+  </div>
+</div>
+
+<script>
+  let tablero = Array(9).fill('');   // espejo del tablero del servidor, '' = celda libre
+  let juegoActivo = true;            // pasa a false mientras el servidor responde o si la partida acabo
+  let puntos = { x: 0, o: 0, e: 0 }; // victorias de X, de O y empates
+
+  const divTablero = document.getElementById('tablero');
+
+  function construirTablero() {
+    divTablero.innerHTML = '';           // borra las celdas viejas antes de crear las nuevas
+    tablero.forEach((_, i) => {
+      const celda = document.createElement('div');
+      celda.className = 'celda';
+      celda.dataset.idx = i;             // indice 0-8, el mismo que usa el backend
+      celda.onclick = () => manejarClick(i);
+      divTablero.appendChild(celda);
+    });
+  }
+
+  function renderizar() {
+    document.querySelectorAll('.celda').forEach((celda, i) => {
+      const val = tablero[i];
+      celda.dataset.val = val;           // el CSS colorea X y O segun este atributo
+      // el simbolo va dentro de un span para que la animacion pop afecte solo a la letra
+      celda.innerHTML = val ? `<span>${val}</span>` : '';
+      // una celda ocupada, o cualquiera si la partida termino, deja de ser clickeable
+      if (val || !juegoActivo) celda.classList.add('bloqueada');
+      else celda.classList.remove('bloqueada');
+    });
+  }
+
+  async function manejarClick(indice) {
+    if (!juegoActivo) return;
+    if (tablero[indice] !== '') return;
+
+    juegoActivo = false;                // evita un segundo click mientras la IA calcula
+    setEstado('IA pensando...', 'robot');
+
+    // el servidor pone la X del humano, calcula la O con MiniMax y devuelve todo
+    const res = await fetch('/mover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tablero: [...tablero], indice })
+    });
+
+    const datos = await res.json();
+    tablero = datos.tablero;            // ya incluye la X y la O nueva
+    renderizar();
+
+    // rebote en la ficha del humano y, con un pequeno retraso, en la de la IA
+    animarCelda(indice);
+    if (datos.mov_ia >= 0) setTimeout(() => animarCelda(datos.mov_ia), 150);
+
+    // mov_ia es -1 cuando la partida acabo antes de que la IA jugara
+    procesarEstado(datos.estado, datos.mov_ia);
+  }
+
+  function procesarEstado(estado, movIa) {
+    switch (estado) {
+      case 'humano_gana':
+        setEstado('¡Ganaste! (caso muy raro con MiniMax)', 'trophy');
+        marcarGanador('X');
+        puntos.x++;
+        actualizarMarcador();
+        break;
+      case 'ia_gana':
+        setEstado('La IA ganó. MiniMax es imbatible.', 'robot');
+        marcarGanador('O');
+        puntos.o++;
+        actualizarMarcador();
+        break;
+      case 'empate':
+        setEstado('¡Empate! Bien jugado.', 'friends');
+        puntos.e++;
+        actualizarMarcador();
+        break;
+      default:
+        // nadie gano ni hay empate, se devuelve el turno al humano
+        juegoActivo = true;
+        setEstado('Tu turno – elige una celda', 'hourglass');
+    }
+  }
+
+  // recorre las 8 lineas posibles y pinta la que tenga las tres celdas del jugador
+  function marcarGanador(jugador) {
+    const combos = [
+      [0,1,2],[3,4,5],[6,7,8],
+      [0,3,6],[1,4,7],[2,5,8],
+      [0,4,8],[2,4,6]
+    ];
+    const clase = jugador === 'O' ? 'ganadora' : 'ganadora-x';
+    const celdas = document.querySelectorAll('.celda');
+
+    combos.forEach(combo => {
+      if (combo.every(i => tablero[i] === jugador)) {
+        combo.forEach(i => celdas[i].classList.add(clase));
+      }
+    });
+  }
+
+  function animarCelda(i) {
+    const celda = document.querySelectorAll('.celda')[i];
+    celda.classList.remove('pop-anim');
+    void celda.offsetWidth;            // leer offsetWidth fuerza un reflow, sin esto la animacion no se repite
+    celda.classList.add('pop-anim');
+  }
+
+  // icono es el nombre de un icono Tabler (ti-<icono>)
+  function setEstado(msg, icono) {
+    document.getElementById('estado').innerHTML = `<i class="ti ti-${icono}"></i> ${msg}`;
+  }
+
+  function actualizarMarcador() {
+    document.getElementById('pts-x').textContent = puntos.x;
+    document.getElementById('pts-o').textContent = puntos.o;
+    document.getElementById('pts-e').textContent = puntos.e;
+  }
+
+  function reiniciar() {
+    tablero = Array(9).fill('');
+    juegoActivo = true;
+    construirTablero();
+    setEstado('Tu turno – elige una celda', 'hourglass');
+  }
+
+  construirTablero();
+</script>
+</body>
+</html>
